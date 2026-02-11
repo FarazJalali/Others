@@ -1,66 +1,48 @@
-name: Auto Update Google Sites Mirror
-
-on:
-  schedule:
-    - cron: '0 0 * * *'   # هر روز ساعت ۰۰:۰۰ UTC
-  workflow_dispatch:
-
-jobs:
-  mirror-and-deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install wget
-        run: sudo apt-get update && sudo apt-get install wget -y
-
       - name: Mirror the Google Sites
         run: |
           rm -rf temp public || true
-          mkdir temp
+          mkdir -p temp
           cd temp
           
+          # دانلود کامل با تنظیمات مناسب
           wget --mirror \
                --convert-links \
                --adjust-extension \
                --page-requisites \
                --no-parent \
                --no-host-directories \
-               --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+               --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36" \
                https://sites.google.com/view/adm-parsianlift/home
           
+          # دیباگ: لیست فایل‌ها بعد دانلود
+          echo "Files after wget:"
+          ls -R
+          
+          # استخراج محتوای اصلی از ساختار Google Sites (معمولاً در view/adm-parsianlift/home)
           if [ -d "view/adm-parsianlift/home" ]; then
-            echo "Moving contents from nested folder to root..."
-            mv view/adm-parsianlift/home/* .
-            mv view/adm-parsianlift/home/.* . 2>/dev/null || true
+            echo "Extracting content from view/adm-parsianlift/home to root..."
+            cp -r view/adm-parsianlift/home/. .  # استفاده از . برای شامل hidden files
             rm -rf view
+          else
+            echo "No nested view folder found - assuming files are already in root"
           fi
           
+          # rename home.html به index.html اگر وجود داشت
           if [ -f "home.html" ]; then
-            echo "Renaming home.html → index.html"
+            echo "Renaming home.html to index.html"
             mv home.html index.html
           fi
+          
+          # اگر هنوز index.html نبود، یک پیام بگذار (برای چک)
+          if [ ! -f "index.html" ]; then
+            echo "No index.html found - creating fallback"
+            echo "<h1>Site mirrored but no index.html - check logs</h1>" > index.html
+          fi
+          
+          # دیباگ نهایی
+          echo "Final files in root:"
+          ls -la
           
           cd ..
           rm -rf public || true
           mv temp public
-
-      - name: Commit changes if any
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-          git add .
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto update: Mirror from Google Sites"
-          git push || echo "No push needed"
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
-          force_orphan: true
