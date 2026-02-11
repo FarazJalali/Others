@@ -4,8 +4,7 @@ on:
   schedule:
     - cron: '0 0 * * *'   # هر روز ساعت ۰۰:۰۰ UTC (تقریباً ۳:۳۰ صبح ایران)
   workflow_dispatch:      # برای اجرای دستی از تب Actions
-  push:                   # موقت اضافه شده تا workflow فعال بشه و توی لیست ظاهر بشه
-    branches: [ main ]
+  
 
 jobs:
   mirror-and-deploy:
