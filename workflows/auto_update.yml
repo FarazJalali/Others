@@ -1,0 +1,53 @@
+name: Auto Update Google Sites Mirror
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # هر روز ساعت ۰۰:۰۰ UTC (تقریباً ۳:۳۰ صبح به وقت ایران)
+  workflow_dispatch:      # برای تست دستی هم می‌تونی اجرا کنی
+
+jobs:
+  mirror-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install wget
+        run: sudo apt-get update && sudo apt-get install wget -y
+
+      - name: Mirror the Google Sites
+        run: |
+          # پاک کردن محتوای قبلی (اختیاری اما بهتره)
+          rm -rf public || true
+          mkdir public
+          cd public
+          
+          # دانلود کامل سایت با تنظیم لینک‌ها برای محلی
+          wget --mirror \
+               --convert-links \
+               --adjust-extension \
+               --page-requisites \
+               --no-parent \
+               --no-host-directories \
+               --directory-prefix=. \
+               https://sites.google.com/view/adm-parsianlift/home
+          
+          # اگر فولدرهای اضافی ساخته شد، فایل‌ها رو به root منتقل کن
+          find . -mindepth 1 -maxdepth 1 -type d -exec mv {}/* . \; || true
+          find . -mindepth 1 -maxdepth 1 -type d -exec rmdir {} \; || true
+
+      - name: Commit changes if any
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "Auto update: Mirror from Google Sites" || echo "No changes detected"
+          git push || echo "No push needed"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          force_orphan: true   # اختیاری: تاریخچه قدیمی پاک می‌شه تا تمیز بمونه
