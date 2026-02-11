@@ -4,7 +4,6 @@ on:
   schedule:
     - cron: '0 0 * * *'   # هر روز ساعت ۰۰:۰۰ UTC (تقریباً ۳:۳۰ صبح ایران)
   workflow_dispatch:      # برای اجرای دستی از تب Actions
-  
 
 jobs:
   mirror-and-deploy:
@@ -19,24 +18,35 @@ jobs:
 
       - name: Mirror the Google Sites
         run: |
-          # پاک کردن محتوای قبلی (اگر وجود داشته باشه)
-          rm -rf public || true
-          mkdir -p public
-          cd public
+          rm -rf temp || true
+          mkdir temp
+          cd temp
           
-          # دانلود کامل سایت با تنظیم لینک‌ها
+          # دانلود با user-agent واقعی برای جلوگیری از بلاک
           wget --mirror \
                --convert-links \
                --adjust-extension \
                --page-requisites \
                --no-parent \
                --no-host-directories \
-               --directory-prefix=. \
+               --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
                https://sites.google.com/view/adm-parsianlift/home
           
-          # انتقال فایل‌ها به ریشه (اگر فولدر اضافی ساخته شد)
-          find . -mindepth 1 -maxdepth 1 -type d -exec mv {}/* . \; || true
-          find . -mindepth 1 -maxdepth 1 -type d -exec rmdir {} \; || true
+          # پیدا کردن فولدر اصلی و انتقال همه محتوای داخلش به ریشه
+          if [ -d "view/adm-parsianlift/home" ]; then
+            mv view/adm-parsianlift/home/* .
+            mv view/adm-parsianlift/home/.* . 2>/dev/null || true
+            rm -rf view
+          fi
+          
+          # اگر فایل home.html وجود داشت، به index.html rename کن
+          if [ -f "home.html" ]; then
+            mv home.html index.html
+          fi
+          
+          cd ..
+          rm -rf public || true
+          mv temp public
 
       - name: Commit changes if any
         run: |
@@ -51,4 +61,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
-          force_orphan: true   # اختیاری: تاریخچه commitهای قبلی پاک می‌شه
+          force_orphan: true
