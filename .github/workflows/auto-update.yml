@@ -1,10 +1,30 @@
+name: Auto Update Google Sites Mirror
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # هر روز ساعت ۰۰:۰۰ UTC
+  workflow_dispatch:
+
+jobs:
+  mirror-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install wget
+        run: sudo apt-get update && sudo apt-get install wget -y
+
       - name: Mirror the Google Sites
         run: |
           rm -rf temp public || true
           mkdir temp
           cd temp
           
-          # دانلود سایت با user-agent مرورگر واقعی
           wget --mirror \
                --convert-links \
                --adjust-extension \
@@ -14,27 +34,33 @@
                --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
                https://sites.google.com/view/adm-parsianlift/home
           
-          # پیدا کردن و استخراج محتوای اصلی از ساختار Google Sites
           if [ -d "view/adm-parsianlift/home" ]; then
-            echo "Found nested folder, moving contents to root..."
+            echo "Moving contents from nested folder to root..."
             mv view/adm-parsianlift/home/* .
             mv view/adm-parsianlift/home/.* . 2>/dev/null || true
             rm -rf view
-          else
-            echo "No nested 'view' folder found - files should already be in current dir"
           fi
           
-          # اگر home.html وجود داشت، به index.html تبدیل کن (GitHub Pages نیاز داره)
           if [ -f "home.html" ]; then
-            echo "Renaming home.html to index.html"
+            echo "Renaming home.html → index.html"
             mv home.html index.html
-          fi
-          
-          # اگر index.html نبود و home.html هم نبود، یک fallback ساده بساز
-          if [ ! -f "index.html" ]; then
-            echo "<h1>No index found - check mirror</h1>" > index.html
           fi
           
           cd ..
           rm -rf public || true
           mv temp public
+
+      - name: Commit changes if any
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add .
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto update: Mirror from Google Sites"
+          git push || echo "No push needed"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          force_orphan: true
