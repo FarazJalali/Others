@@ -19,12 +19,13 @@ jobs:
       - name: Install wget
         run: sudo apt-get update && sudo apt-get install wget -y
 
-      - name: Mirror the Google Sites
+            - name: Mirror the Google Sites
         run: |
           rm -rf temp public || true
           mkdir -p temp
           cd temp
           
+          # دانلود
           wget --mirror \
                --convert-links \
                --adjust-extension \
@@ -34,47 +35,35 @@ jobs:
                --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36" \
                https://sites.google.com/view/adm-parsianlift/home
           
-          # دیباگ: نمایش ساختار فایل‌ها بعد دانلود
-          echo "Files after download:"
-          ls -R
+          # دیباگ: ساختار بعد دانلود
+          echo "Directory structure after wget:"
+          ls -R .
           
-          # انتقال محتوا از فولدر تو در تو به ریشه
-          if [ -d "view/adm-parsianlift/home" ]; then
-            echo "Moving content from view/adm-parsianlift/home to root..."
-            cp -r view/adm-parsianlift/home/. .
-            rm -rf view
+          # استخراج از عمق فولدر (چند سطح ممکن)
+          shopt -s dotglob  # برای hidden files
+          if compgen -G "**/home" > /dev/null; then
+            echo "Found nested home folder, extracting..."
+            find . -type d -name "home" -exec cp -r {}/.. . \; || true
+            find . -type d -name "home" -exec rm -rf {} \; || true
           fi
           
-          # تبدیل home.html به index.html اگر وجود داشت
+          # حذف فولدرهای باقی‌مانده view و adm-parsianlift
+          rm -rf view adm-parsianlift 2>/dev/null || true
+          
+          # rename اگر home.html بود
           if [ -f "home.html" ]; then
-            echo "Renaming home.html to index.html"
             mv home.html index.html
           fi
           
-          # اگر index.html نبود، پیام خطا بگذار
+          # fallback اگر index نبود
           if [ ! -f "index.html" ]; then
-            echo "Warning: No index.html created"
-            echo "<h1>Mirror issue - no index.html found</h1>" > index.html
+            echo "<h1>No index.html - mirror check needed</h1>" > index.html
           fi
           
-          echo "Final files:"
-          ls -la
+          # دیباگ نهایی
+          echo "Final root files:"
+          ls -la .
           
           cd ..
           rm -rf public || true
           mv temp public
-
-      - name: Commit changes if any
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-          git add .
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto update mirror from Google Sites"
-          git push || echo "No changes to push"
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
-          force_orphan: true
